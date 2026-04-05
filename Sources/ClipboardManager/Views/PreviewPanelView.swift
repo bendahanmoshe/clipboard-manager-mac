@@ -126,13 +126,48 @@ struct PreviewPanelView: View {
     private func metaSection(_ item: ClipboardItem) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let app = item.sourceAppName {
-                metaRow("app.badge",     value: app)
+                metaRow("app.badge", value: app)
             }
-            metaRow("clock",             value: item.timestamp.formatted(date: .abbreviated, time: .shortened))
-            metaRow("hand.tap",          value: "\(item.accessCount) use\(item.accessCount == 1 ? "" : "s")")
+            metaRow("clock",     value: item.timestamp.formatted(date: .abbreviated, time: .shortened))
+            metaRow("hand.tap",  value: "\(item.accessCount) use\(item.accessCount == 1 ? "" : "s")")
+            categoryPickerRow(item)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
+    }
+
+    private func categoryPickerRow(_ item: ClipboardItem) -> some View {
+        let assigned = viewModel.categories.first { $0.id.uuidString == item.categoryId }
+        return HStack(spacing: 6) {
+            Image(systemName: "tag")
+                .font(.system(size: 9))
+                .foregroundStyle(.quaternary)
+                .frame(width: 12)
+
+            Menu {
+                Button {
+                    viewModel.assignCategory(nil, to: item)
+                } label: {
+                    Label("No Category", systemImage: "xmark.circle")
+                }
+                Divider()
+                ForEach(viewModel.categories.filter { !$0.isSystem }) { cat in
+                    Button {
+                        viewModel.assignCategory(cat, to: item)
+                    } label: {
+                        Label(cat.name, systemImage: cat.icon)
+                    }
+                }
+            } label: {
+                Text(assigned?.name ?? "No Category")
+                    .font(.system(size: 10))
+                    .foregroundStyle(assigned.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(.tertiary))
+                    .lineLimit(1)
+                    .underline(color: .clear)
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
     }
 
     private func metaRow(_ icon: String, value: String) -> some View {

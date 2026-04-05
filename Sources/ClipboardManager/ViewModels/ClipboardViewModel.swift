@@ -77,20 +77,38 @@ final class ClipboardViewModel: ObservableObject {
                 results = self.storage.fetchFavorites()
             } else if category.id == ClipboardCategory.pinnedID {
                 results = self.storage.fetchPinned()
-            } else if query.isEmpty && type == nil {
-                results = self.storage.fetchAll(limit: 200)
-            } else {
+            } else if category.isSystem {
+                // "All Items" — no category filter
                 results = self.storage.search(query: query, type: type, limit: 200)
+            } else {
+                // Custom category (Work, Personal, Real Estate, …)
+                results = self.storage.search(query: query, type: type,
+                                              categoryId: category.id.uuidString, limit: 200)
             }
 
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 self.items = results
-                // Preserve selection if still visible
                 if let sel = self.selectedItem, !results.contains(sel) {
                     self.selectedItem = results.first
                 }
             }
+        }
+    }
+
+    // MARK: - Category assignment
+
+    func assignCategory(_ category: ClipboardCategory?, to item: ClipboardItem) {
+        guard let idx = items.firstIndex(of: item) else { return }
+        let newId = category?.id.uuidString
+        items[idx].categoryId = newId
+        storage.updateCategory(id: item.id, categoryId: newId)
+
+        // If viewing a custom category and this item no longer belongs, remove it
+        if !selectedCategory.isSystem,
+           selectedCategory.id.uuidString != (newId ?? "") {
+            items.remove(at: idx)
+            if selectedItem == item { selectedItem = items.first }
         }
     }
 

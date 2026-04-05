@@ -56,18 +56,32 @@ struct ClipboardListView: View {
     private var emptyView: some View {
         VStack(spacing: 10) {
             Spacer()
-            Image(systemName: viewModel.searchQuery.isEmpty ? "tray" : "magnifyingglass")
+            Image(systemName: emptyIcon)
                 .font(.system(size: 30))
                 .foregroundStyle(.quaternary)
-            Text(
-                viewModel.searchQuery.isEmpty
-                    ? "Nothing copied yet"
-                    : "No results for \"\(viewModel.searchQuery)\""
-            )
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
+            Text(emptyMessage)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
             Spacer()
         }
+    }
+
+    private var emptyIcon: String {
+        if !viewModel.searchQuery.isEmpty { return "magnifyingglass" }
+        if !viewModel.selectedCategory.isSystem { return "tag" }
+        return "tray"
+    }
+
+    private var emptyMessage: String {
+        if !viewModel.searchQuery.isEmpty {
+            return "No results for \"\(viewModel.searchQuery)\""
+        }
+        if !viewModel.selectedCategory.isSystem {
+            return "No items in \"\(viewModel.selectedCategory.name)\" yet.\nSelect an item and assign it here using the category menu in the preview panel."
+        }
+        return "Nothing copied yet"
     }
 
     // MARK: - Item list

@@ -125,18 +125,28 @@ final class StorageService: @unchecked Sendable {
 
     // MARK: - Fetch
 
-    func fetchAll(limit: Int = 200, offset: Int = 0) -> [ClipboardItem] {
+    func fetchAll(limit: Int = 200, offset: Int = 0,
+                  type: ClipboardItemType? = nil,
+                  categoryId: String? = nil) -> [ClipboardItem] {
         var result: [ClipboardItem] = []
         queue.sync {
-            let sql = """
-                SELECT * FROM clipboard_items
-                ORDER BY is_pinned DESC, timestamp DESC
-                LIMIT ? OFFSET ?;
-            """
+            var clauses: [String] = []
+            if type != nil       { clauses.append("type = ?") }
+            if categoryId != nil { clauses.append("category_id = ?") }
+
+            var sql = "SELECT * FROM clipboard_items"
+            if !clauses.isEmpty { sql += " WHERE " + clauses.joined(separator: " AND ") }
+            sql += " ORDER BY is_pinned DESC, timestamp DESC LIMIT ? OFFSET ?"
+
             guard let stmt = prepare(sql) else { return }
             defer { sqlite3_finalize(stmt) }
-            sqlite3_bind_int(stmt, 1, Int32(limit))
-            sqlite3_bind_int(stmt, 2, Int32(offset))
+
+            var idx: Int32 = 1
+            if let t = type       { bind(stmt, idx, t.rawValue); idx += 1 }
+            if let c = categoryId { bind(stmt, idx, c);          idx += 1 }
+            sqlite3_bind_int(stmt, idx, Int32(limit));  idx += 1
+            sqlite3_bind_int(stmt, idx, Int32(offset))
+
             while sqlite3_step(stmt) == SQLITE_ROW {
                 if let item = rowToItem(stmt) { result.append(item) }
             }
@@ -144,13 +154,13 @@ final class StorageService: @unchecked Sendable {
         return result
     }
 
-    func search(query: String, type: ClipboardItemType? = nil, limit: Int = 200) -> [ClipboardItem] {
+    func search(query: String, type: ClipboardItemType? = nil,
+                categoryId: String? = nil, limit: Int = 200) -> [ClipboardItem] {
         guard !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return fetchAll(limit: limit)
+            return fetchAll(limit: limit, type: type, categoryId: categoryId)
         }
         var result: [ClipboardItem] = []
         queue.sync {
-            // FTS search
             let ftsQ = query.components(separatedBy: .whitespaces)
                 .filter { !$0.isEmpty }
                 .map { "\($0)*" }
@@ -161,7 +171,8 @@ final class StorageService: @unchecked Sendable {
                 INNER JOIN clipboard_fts fts ON ci.id = fts.item_id
                 WHERE clipboard_fts MATCH ?
             """
-            if let type { sql += " AND ci.type = '\(type.rawValue)'" }
+            if let type       { sql += " AND ci.type = '\(type.rawValue)'" }
+            if let categoryId { sql += " AND ci.category_id = '\(categoryId)'" }
             sql += " ORDER BY ci.is_pinned DESC, rank, ci.timestamp DESC LIMIT ?"
 
             guard let stmt = prepare(sql) else { return }
@@ -173,6 +184,15 @@ final class StorageService: @unchecked Sendable {
             }
         }
         return result
+    }
+
+    // MARK: - Category
+
+    func updateCategory(id: UUID, categoryId: String?) {
+        queue.async { [weak self] in
+            let value = categoryId.map { "'\($0)'" } ?? "NULL"
+            self?.exec("UPDATE clipboard_items SET category_id=\(value) WHERE id='\(id.uuidString)';")
+        }
     }
 
     func fetchFavorites(limit: Int = 200) -> [ClipboardItem] {
