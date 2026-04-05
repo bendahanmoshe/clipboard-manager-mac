@@ -21,6 +21,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPanel()
         setupHotkey()
         setupKeyMonitor()
+        checkAccessibilityPermission()
+    }
+
+    // MARK: - Accessibility permission
+
+    private func checkAccessibilityPermission() {
+        let trusted = AXIsProcessTrusted()
+        guard !trusted else { return }
+
+        // Show a one-time alert guiding the user to grant permission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let alert = NSAlert()
+            alert.messageText = "Accessibility Permission Required"
+            alert.informativeText = """
+                ClipboardManager needs Accessibility access to listen for the global \
+                shortcut ⌘⇧V.
+
+                Open System Settings → Privacy & Security → Accessibility, \
+                then enable ClipboardManager and relaunch the app.
+                """
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Later")
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(
+                    URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+                )
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
